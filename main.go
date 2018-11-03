@@ -45,7 +45,6 @@ func (p *Project) DurationSince(t time.Time) (d time.Duration) {
 	// Now calculate time of all children (projects with name p.Name/*)
 	for _, c := range projects {
 		if strings.Contains(c.Name, p.Name + "/") {
-			// TODO have children cache these values 
 			d += c.DurationSince(t)
 		}
 	}
@@ -58,9 +57,11 @@ var (
 )
 
 func main() {
-	load("./tb.json")
-
 	var err error
+
+	path := os.Getenv("HOME") + "/.tb.json"
+	err = load(path)
+
 	l := len(os.Args)
 	if l == 1 {
 		stats()
@@ -78,7 +79,7 @@ func main() {
 		}
 	}
 
-	save("./tb.json")
+	err = save(path)
 
 	if err != nil {
 		fmt.Println(err)
