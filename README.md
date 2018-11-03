@@ -2,15 +2,20 @@
 Bit of a time tracking meme
 
 ## Usage
-`tb` - gives a list of running timers
-`tb -a` - gives a list all timers
-`tb -A` - gives a list all timers including archived ones
-`tb new projname` - creates a new project
-`tb new projname/subproj` - creates a new subproject
-`tb start projname` - starts tracking project
-`tb stop projname` - stops tracking project
-`tb stats day` - show time tracked for the past day (also accepts week and month)
-`tb archive projname` - archive a project
+`tb` - gives a list of running timers  
+`tb -a` - gives a list all timers  
+`tb -A` - gives a list all timers including archived ones  
+`tb new projname` - creates a new project  
+`tb new projname/subproj` - creates a new subproject  
+`tb start projname` - starts tracking project  
+`tb stop projname` - stops tracking project  
+`tb stats day` - show time tracked for the past day (also accepts week and month)  
+`tb archive projname` - archive a project  
+
+## Installation
+1. Clone this repo
+2. Have Go installed
+3. Inside the repo, `go install`
 
 ## Other stuff
 All projects and segments are stored in `~/.tb.json`, should be pretty easy to edit or whatever you want to do with it.
