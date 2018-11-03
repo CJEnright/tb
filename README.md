@@ -22,7 +22,7 @@ All projects and segments are stored in `~/.tb.json`, should be pretty easy to e
 
 Projects can be nested with a slash, so `school/classname` will be a subproject of school, and all time tracked specifically to `classname` will be added to the total time shown by `school`
 
-### Example
+## Example
 ```
 $ tb new school
 $ tb new school/cs250
