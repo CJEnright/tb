@@ -13,11 +13,44 @@ import (
 	clr "github.com/logrusorgru/aurora"
 )
 
+type Segment struct {
+	Start time.Time `json:"start"`
+	End time.Time `json:"end"`
+	Duration time.Duration `json:"duration"`
+}
+
 type Project struct {
 	Name string `json:"name"`
 	Active bool `json:"active"`
+	Archived bool `json:"archived"`
 	StartedAt time.Time `json:"startTime"`
-	Duration time.Duration `json:"duration"`
+	Segments []Segment `json:"segments"`
+}
+
+func (s *Segment) CalculateDuration() {
+	s.Duration = s.End.Sub(s.Start)
+}
+
+func (p *Project) DurationSince(t time.Time) (d time.Duration) {
+	// Calculate own time
+	for _, s := range p.Segments {
+		if s.End.IsZero() {
+			// If something hasn't ended, just count the time from start to now
+			d += time.Now().Sub(s.Start)
+		} else if t.Before(s.Start) {
+			d += s.Duration
+		}
+	}
+
+	// Now calculate time of all children (projects with name p.Name/*)
+	for _, c := range projects {
+		if strings.Contains(c.Name, p.Name + "/") {
+			// TODO have children cache these values 
+			d += c.DurationSince(t)
+		}
+	}
+
+	return d
 }
 
 var (
@@ -38,7 +71,9 @@ func main() {
 			err = start()
 		} else if os.Args[1] == "stop" {
 			err = stop()
-		} else if os.Args[1] == "-a" {
+		} else if os.Args[1] == "archive" {
+			err = archive()
+		} else {
 			stats()
 		}
 	}
@@ -76,10 +111,11 @@ func save(path string) (err error) {
 }
 
 func stats() {
-	flagAll := flag.Bool("a", false, "show timers not currently running")
+	flagAll := flag.Bool("a", false, "Show timers not currently running")
+	flagAllAndArchived := flag.Bool("A", false, "Shows all timers, even archived ones")
 	flag.Parse()
 
-	if len(os.Args) == 2 {
+	if len(os.Args) < 3 {
 		for _, p := range projects {
 			name := p.Name
 			var spacing string
@@ -97,28 +133,58 @@ func stats() {
 				}
 			}
 
-
-			if p.Active {
+			if p.Active && !p.Archived {
 				fmt.Printf(
-					"%s%s is %s with a total duration of %s\n",
+					"%s%s is %s\n",
 					spacing,
 					clr.Bold(name),
 					clr.Green("running"),
-					p.Duration.Truncate(time.Second).String(),
 				)
-			} else if *flagAll {
+			} else if (*flagAllAndArchived || *flagAll) && !p.Archived {
 				fmt.Printf(
-					"%s%s is %s with a total duration of %s\n",
+					"%s%s is %s\n",
 					spacing,
 					clr.Bold(name),
-					"not running",
-					p.Duration.Truncate(time.Second).String(),
+					clr.Red("not running"),
+				)
+			} else if *flagAllAndArchived && p.Archived {
+				fmt.Printf(
+					"%s%s %s is %s\n",
+					spacing,
+					clr.Bold("[ARCHIVED]"),
+					clr.Bold(name),
+					clr.Red("not running"),
 				)
 			}
 		}
 	} else if len(os.Args) == 3 {
-		if os.Args[2] == "week" {
-
+		if os.Args[2] == "day" {
+			for _, p := range projects {
+				dur := p.DurationSince(time.Now().AddDate(0, 0, -1))
+				fmt.Printf(
+					"logged %s for %s in the past day\n",
+					p.Name,
+					dur.Truncate(time.Second).String(),
+				)
+			}
+		} else if os.Args[2] == "week" {
+			for _, p := range projects {
+				dur := p.DurationSince(time.Now().AddDate(0, 0, -7))
+				fmt.Printf(
+					"logged %s for %s in the past week\n",
+					p.Name,
+					dur.Truncate(time.Second).String(),
+				)
+			}
+		} else if os.Args[2] == "month" {
+			for _, p := range projects {
+				dur := p.DurationSince(time.Now().AddDate(0, -1, 0))
+				fmt.Printf(
+					"logged %s for %s in the past month\n",
+					p.Name,
+					dur.Truncate(time.Second).String(),
+				)
+			}
 		}
 	}
 }
@@ -138,6 +204,8 @@ func create() (err error) {
 		p := Project{Name: projectName}
 		projects = append(projects, p)
 
+		fmt.Printf("Created \"%s\"\n", p.Name)
+
 		return err
 	} else {
 		projectName = os.Args[2]
@@ -145,6 +213,8 @@ func create() (err error) {
 		if IndexOf(projects, projectName) == -1 {
 			p := Project{Name: projectName}
 			projects = append(projects, p)
+
+			fmt.Printf("Created \"%s\"\n", p.Name)
 		} else {
 			return fmt.Errorf("Project already exists with name \"%s\"", projectName)
 		}
@@ -165,10 +235,15 @@ func start() (err error) {
 		if projects[index].Active {
 			return fmt.Errorf("Project \"%s\" is already running", projectName)
 		} else {
-			projects[index].Active = true
-			projects[index].StartedAt = time.Now()
+			p := projects[index]
 
-			fmt.Printf("Started \"%s\" at %s\n", projectName, projects[index].StartedAt.String())
+			seg := Segment{Start: time.Now()}
+			p.Segments = append(p.Segments, seg)
+			p.Active = true
+
+			projects[index] = p
+
+			fmt.Printf("Started \"%s\" at %s\n", projectName, seg.Start.Format("15:04 EDT"))
 		}
 	} else {
 		var yn string
@@ -198,13 +273,40 @@ func stop() (err error) {
 	index := IndexOf(projects, projectName)
 	if index != -1 {
 		if projects[index].Active {
-			projects[index].Active = false
-			projects[index].Duration += time.Now().Sub(projects[index].StartedAt)
+			p := projects[index]
 
-			fmt.Printf("Stopped \"%s\" at a duration of %s\n", projectName, projects[index].Duration.Truncate(time.Second).String())
+			p.Active = false
+			p.Segments[len(p.Segments) - 1].End = time.Now()
+			p.Segments[len(p.Segments) - 1].CalculateDuration()
+
+			projects[index] = p
+
+			dur := p.Segments[len(p.Segments) - 1].Duration
+			fmt.Printf("Stopped \"%s\" after a duration of %s\n", p.Name, dur.Truncate(time.Second).String())
 		} else {
 			return fmt.Errorf("Project \"%s\" isn't running", projectName)
 		}
+	} else {
+		// Not offering to create a project here for UX-y reasons
+		// In most cases reaching here means you had a typo
+		return fmt.Errorf("No project named \"%s\" found", projectName)
+	}
+
+	return err
+}
+
+func archive() (err error) {
+	if len(os.Args) < 3 {
+		return fmt.Errorf("No project specified")
+	}
+
+	projectName := os.Args[2]
+
+	index := IndexOf(projects, projectName)
+	if index != -1 {
+		projects[index].Active = false
+		projects[index].Archived = true
+		fmt.Printf("Archived \"%s\"\n", projectName)
 	} else {
 		return fmt.Errorf("No project named \"%s\" found", projectName)
 	}
