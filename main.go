@@ -1,30 +1,30 @@
 package main
 
 import (
-	"time"
-	"strings"
-	"fmt"
-	"flag"
-	"sort"
 	"encoding/json"
-	"os"
+	"flag"
+	"fmt"
 	"io/ioutil"
+	"os"
+	"sort"
+	"strings"
+	"time"
 
 	clr "github.com/logrusorgru/aurora"
 )
 
 type Segment struct {
-	Start time.Time `json:"start"`
-	End time.Time `json:"end"`
+	Start    time.Time     `json:"start"`
+	End      time.Time     `json:"end"`
 	Duration time.Duration `json:"duration"`
 }
 
 type Project struct {
-	Name string `json:"name"`
-	Active bool `json:"active"`
-	Archived bool `json:"archived"`
+	Name      string    `json:"name"`
+	Active    bool      `json:"active"`
+	Archived  bool      `json:"archived"`
 	StartedAt time.Time `json:"startTime"`
-	Segments []Segment `json:"segments"`
+	Segments  []Segment `json:"segments"`
 }
 
 func (s *Segment) CalculateDuration() {
@@ -44,7 +44,7 @@ func (p *Project) DurationSince(t time.Time) (d time.Duration) {
 
 	// Now calculate time of all children (projects with name p.Name/*)
 	for _, c := range projects {
-		if strings.Contains(c.Name, p.Name + "/") {
+		if strings.Contains(c.Name, p.Name+"/") {
 			d += c.DurationSince(t)
 		}
 	}
@@ -130,7 +130,7 @@ func stats() {
 				if slashes > 0 {
 					spacing += "↳ "
 
-					name = name[strings.LastIndex(name, "/") + 1:len(name)]
+					name = name[strings.LastIndex(name, "/")+1 : len(name)]
 				}
 			}
 
@@ -258,7 +258,9 @@ func start() (err error) {
 
 		if yn == "y" {
 			create()
+			start()
 		}
+
 	}
 
 	return err
@@ -277,12 +279,12 @@ func stop() (err error) {
 			p := projects[index]
 
 			p.Active = false
-			p.Segments[len(p.Segments) - 1].End = time.Now()
-			p.Segments[len(p.Segments) - 1].CalculateDuration()
+			p.Segments[len(p.Segments)-1].End = time.Now()
+			p.Segments[len(p.Segments)-1].CalculateDuration()
 
 			projects[index] = p
 
-			dur := p.Segments[len(p.Segments) - 1].Duration
+			dur := p.Segments[len(p.Segments)-1].Duration
 			fmt.Printf("Stopped \"%s\" after a duration of %s\n", p.Name, dur.Truncate(time.Second).String())
 		} else {
 			return fmt.Errorf("Project \"%s\" isn't running", projectName)
