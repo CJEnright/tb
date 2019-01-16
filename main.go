@@ -25,13 +25,14 @@ const (
 // goes with config.  However, I'd also like to keep everything to one file
 // which makes this a bit more difficult.
 func main() {
-	// TODO create file if it doesn't exist
 	path := os.Getenv("HOME") + "/.tb.json"
 	tb, err := load(path)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+
+	didEdit := false
 
 	l := len(os.Args)
 	if l == 1 {
@@ -53,6 +54,8 @@ func main() {
 
 				p := Project{Name: projectName}
 				tb.Projects = append(tb.Projects, p)
+				didEdit = true
+
 				fmt.Printf("created project \"%s\"\n", p.Name)
 			}
 		}
@@ -65,18 +68,22 @@ func main() {
 		switch command {
 		case "start":
 			err = p.Start()
+			didEdit = true
 		case "stop":
 			err = p.Stop()
+			didEdit = true
 		case "s":
 			if p.Active == true {
 				p.Stop()
 			} else {
 				p.Start()
 			}
+			didEdit = true
 		case "timecard":
 			err = p.PrintTimecard(tb.Conf)
 		case "archive":
 			p.Archive()
+			didEdit = true
 		}
 	}
 
@@ -85,10 +92,12 @@ func main() {
 		return
 	}
 
-	err = save(path, tb)
-	if err != nil {
-		fmt.Println(err)
-		return
+	if didEdit {
+		err = save(path, tb)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 	}
 }
 
@@ -310,12 +319,28 @@ func FindProject(tb *tbWrapper, projectName string) (project *Project, err error
 }
 
 func load(path string) (tb *tbWrapper, err error) {
-	input, err := ioutil.ReadFile(path)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		f, err := os.Create(path)
+		if err != nil {
+			return tb, err
+		}
+
+		f.Write([]byte("{}"))
+		f.Close()
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return tb, err
+	}
+	defer f.Close()
+
+	bytes, err := ioutil.ReadAll(f)
 	if err != nil {
 		return tb, err
 	}
 
-	err = json.Unmarshal(input, &tb)
+	err = json.Unmarshal(bytes, &tb)
 	if err != nil {
 		return tb, err
 	}
