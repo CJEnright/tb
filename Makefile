@@ -1,6 +1,7 @@
-GOCMD=go
-GOBUILD=$(GOCMD) build
 BINARY_NAME=tb
 
 build:
-	$(GOBUILD) -o $(BINARY_NAME) -v
+	go build -o $(BINARY_NAME) -v
+
+install:
+	go install
