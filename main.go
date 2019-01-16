@@ -18,7 +18,6 @@ const (
 	DefaultTimeFormat = "15:04:05"
 )
 
-// TODO stats and status
 // TODO ideally we shouldn't be reading the whole json file on every operation
 // because most of them will just be starting/stopping.  The only time we do
 // need to read operations is when we're calculating times.  the same kinda
@@ -37,6 +36,13 @@ func main() {
 	l := len(os.Args)
 	if l == 1 {
 		Status(tb)
+	} else if l == 2 {
+		command := strings.ToLower(os.Args[1])
+
+		switch command {
+		case "stats":
+			Stats(tb.Projects)
+		}
 	} else {
 		// ToLower will make commands case insensitive
 		command := strings.ToLower(os.Args[1])
@@ -45,19 +51,35 @@ func main() {
 		var p *Project
 		p, err = FindProject(tb, projectName)
 
-		if command == "new" {
+		switch command {
+		case "new":
 			if err == nil && p.Name == projectName {
 				fmt.Printf("project with name \"%s\" already exists\n", p.Name)
 				return
 			} else {
-				err = nil
+				// Add base projects so stats come out right
+				roots := strings.Split(projectName, "/")
+				for i := 0; i < len(roots)-1; i++ {
+					combined := strings.Join(roots[:i+1], "/")
+					// Make sure project with this name doesn't exist
+					_, err = FindProject(tb, combined)
+					if err != nil {
+						p := Project{Name: combined}
+						tb.Projects = append(tb.Projects, p)
+					}
+				}
 
 				p := Project{Name: projectName}
 				tb.Projects = append(tb.Projects, p)
 				didEdit = true
 
 				fmt.Printf("created project \"%s\"\n", p.Name)
+				err = nil
 			}
+		case "stats":
+			Stats(tb.Projects)
+			err = nil
+			break
 		}
 
 		if err != nil {
@@ -80,7 +102,7 @@ func main() {
 			}
 			didEdit = true
 		case "timecard":
-			err = p.PrintTimecard(tb.Conf)
+			err = p.PrintTimecard(tb.Conf, tb.Projects)
 		case "archive":
 			p.Archive()
 			didEdit = true
@@ -165,8 +187,15 @@ func (p *Project) Archive() {
 	fmt.Printf("archived \"%s\"\n", p.Name)
 }
 
-func (p *Project) PrintTimecard(config Config) (err error) {
-	since := ParseTimeString()
+func (p *Project) PrintTimecard(config Config, projects []Project) (err error) {
+	since := ParseTimeString(3)
+
+	var sinceString string
+	if len(os.Args) <= 3 {
+		sinceString = "week"
+	} else {
+		sinceString = strings.Join(os.Args[3:], " ")
+	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintf(w, "Date\tStart\tEnd\tDuration\n")
@@ -189,8 +218,9 @@ func (p *Project) PrintTimecard(config Config) (err error) {
 	w.Flush()
 
 	fmt.Println("---------------------------------------")
-	durSince := p.durationSince(time.Now().Add(since)).Truncate(time.Second)
-	fmt.Printf("Total duration: %s since %s\n", durSince, since.String())
+	dur := p.durationSince(time.Now().Add(-since), projects).Truncate(time.Second)
+	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceString)
+
 	return err
 }
 
@@ -204,7 +234,7 @@ func (p *Project) entriesSince(t time.Time) (entries []Entry) {
 	return entries
 }
 
-func (p *Project) durationSince(t time.Time) (d time.Duration) {
+func (p *Project) durationSince(t time.Time, projects []Project) (d time.Duration) {
 	// Calculate own time
 	for _, s := range p.Entries {
 		if s.End.IsZero() {
@@ -215,86 +245,61 @@ func (p *Project) durationSince(t time.Time) (d time.Duration) {
 		}
 	}
 
-	/*
-		// Now calculate time of all children (projects with name p.Name/*)
-		for _, c := range projects {
-			if strings.Contains(c.Name, p.Name+"/") {
-				d += c.durationSince(t)
-			}
+	// Calculate time of all children (projects with name p.Name/*)
+	for _, c := range projects {
+		if strings.Contains(c.Name, p.Name+"/") {
+			d += c.durationSince(t, projects)
 		}
-	*/
+	}
 
 	return d
 }
 
+// TODO show heirarchy of parents or whatever
 func Status(tb *tbWrapper) {
-	// TODO fix all this ish
 	for _, p := range tb.Projects {
-		name := p.Name
-		var spacing string
-
-		slashes := strings.Count(p.Name, "/")
-		for i := 1; i < slashes; i++ {
-			spacing += "  "
+		if p.Active {
+			fmt.Printf("%s is %s\n", p.Name, "running")
 		}
-
-		if slashes > 0 {
-			spacing += "↳ "
-
-			name = name[strings.LastIndex(name, "/")+1 : len(name)]
-		}
-
-		fmt.Printf("%s%s is %s\n", spacing, name, "running")
-		/*
-			if p.Active && !p.Archived {
-				fmt.Printf("%s%s is %s\n", spacing, name, "running")
-			} else if (*flagAllAndArchived || *flagAll) && !p.Archived {
-				fmt.Printf("%s%s is %s\n", spacing, name, "not running")
-			} else if *flagAllAndArchived && p.Archived {
-				fmt.Printf("%s%s %s is %s\n", spacing, "[ARCHIVED]", name, "not running")
-			}
-		*/
 	}
 }
 
-// TODO clean this up
-/*
-func Stats(projectName string) (err error) {
+func Stats(projects []Project) (err error) {
+	var since time.Duration
 	if len(os.Args) < 3 {
-	} else if len(os.Args) == 3 {
-		if os.Args[2] == "day" {
-			for _, p := range projects {
-				dur := p.durationSince(time.Now().AddDate(0, 0, -1))
-				fmt.Printf(
-					"logged %s for %s in the past day\n",
-					p.Name,
-					dur.Truncate(time.Second).String(),
-				)
+		since = time.Since(time.Now().AddDate(0, 0, -7))
+	} else {
+		since = ParseTimeString(2)
+	}
+
+	for _, p := range projects {
+		if !p.Archived {
+			var spacing string
+			slashes := strings.Count(p.Name, "/")
+			for i := 1; i < slashes; i++ {
+				spacing += "  "
 			}
-		} else if os.Args[2] == "week" {
-			for _, p := range projects {
-				dur := p.durationSince(time.Now().AddDate(0, 0, -7))
-				fmt.Printf(
-					"logged %s for %s in the past week\n",
-					p.Name,
-					dur.Truncate(time.Second).String(),
-				)
+
+			name := p.Name
+			if slashes > 0 {
+				spacing += "↳ "
+
+				name = name[strings.LastIndex(name, "/")+1 : len(name)]
 			}
-		} else if os.Args[2] == "month" {
-			for _, p := range projects {
-				dur := p.durationSince(time.Now().AddDate(0, -1, 0))
-				fmt.Printf(
-					"logged %s for %s in the past month\n",
-					p.Name,
-					dur.Truncate(time.Second).String(),
-				)
-			}
+
+			dur := p.durationSince(time.Now().Add(-since), projects)
+			fmt.Printf(
+				"%s%s for %s in the past %s\n",
+				spacing,
+				name,
+				dur.Truncate(time.Second).String(),
+				strings.Join(os.Args[2:], " "),
+			)
 		}
 	}
 
 	return err
 }
-*/
 
 // FindProject finds the first full match or suffix match of a project
 func FindProject(tb *tbWrapper, projectName string) (project *Project, err error) {
@@ -311,7 +316,7 @@ func FindProject(tb *tbWrapper, projectName string) (project *Project, err error
 	if len(potentialIndexes) > 1 {
 		response := 0
 		for response < 1 || response > len(potentialIndexes) {
-			fmt.Printf("multiple projects found for \"%s\":\n", projectName)
+			fmt.Printf("multiple projects found with suffix \"%s\":\n", projectName)
 
 			for i, v := range potentialIndexes {
 				fmt.Printf("%d. %s\n", i+1, tb.Projects[v].Name)
@@ -329,6 +334,46 @@ func FindProject(tb *tbWrapper, projectName string) (project *Project, err error
 	}
 
 	return project, fmt.Errorf("no project named \"%s\" found", projectName)
+}
+
+func ParseTimeString(startIndex int) (dur time.Duration) {
+	if len(os.Args) <= startIndex {
+		return time.Since(time.Now().AddDate(0, 0, -7))
+	}
+
+	timeString := strings.ToLower(strings.Join(os.Args[startIndex:], " "))
+	switch {
+	case strings.Contains(timeString, "hour"):
+		dur = time.Since(time.Now().Add(-1 * time.Hour))
+	case strings.Contains(timeString, "day"):
+		dur = time.Since(time.Now().AddDate(0, 0, -1))
+	case strings.Contains(timeString, "week"):
+		dur = time.Since(time.Now().AddDate(0, 0, -7))
+	case strings.Contains(timeString, "month"):
+		dur = time.Since(time.Now().AddDate(0, -1, 0))
+	case strings.Contains(timeString, "year"):
+		dur = time.Since(time.Now().AddDate(-1, 0, 0))
+	default:
+		dur = time.Since(time.Now().AddDate(0, 0, -7))
+	}
+
+	r := regexp.MustCompile("[0-9]+")
+	mult, _ := strconv.Atoi(r.FindString(timeString))
+	if mult < 1 {
+		mult = 1
+	}
+
+	return dur * time.Duration(mult)
+}
+
+func Contains(s []string, e string) bool {
+	for _, v := range s {
+		if v == e {
+			return true
+		}
+	}
+
+	return false
 }
 
 func load(path string) (tb *tbWrapper, err error) {
@@ -382,40 +427,4 @@ func save(path string, tb *tbWrapper) (err error) {
 
 	err = ioutil.WriteFile(path, out, 0644)
 	return err
-}
-
-func ParseTimeString() (dur time.Duration) {
-	timeString := strings.ToLower(strings.Join(os.Args[3:], " "))
-	switch {
-	case strings.Contains(timeString, "hour"):
-		dur = time.Since(time.Now().Add(-time.Hour))
-	case strings.Contains(timeString, "day"):
-		dur = time.Since(time.Now().AddDate(0, 0, -1))
-	case strings.Contains(timeString, "week"):
-		dur = time.Since(time.Now().AddDate(0, 0, -7))
-	case strings.Contains(timeString, "month"):
-		dur = time.Since(time.Now().AddDate(0, -1, 0))
-	case strings.Contains(timeString, "year"):
-		dur = time.Since(time.Now().AddDate(-1, 0, 0))
-	default:
-		dur = time.Since(time.Now().AddDate(0, 0, -7))
-	}
-
-	r := regexp.MustCompile("[0-9]+")
-	mult, _ := strconv.Atoi(r.FindString(timeString))
-	if mult < 1 {
-		mult = 1
-	}
-
-	return dur * time.Duration(mult)
-}
-
-func Contains(s []string, e string) bool {
-	for _, v := range s {
-		if v == e {
-			return true
-		}
-	}
-
-	return false
 }
