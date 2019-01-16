@@ -1,21 +1,30 @@
 # tb
 Bit of a time tracking meme
 
-## Usage
-`tb` - gives a list of running timers  
-`tb -a` - gives a list all timers  
-`tb -A` - gives a list all timers including archived ones  
+## Commands
+`stats` - stats for all projects in a time period
+`new` - create a new project
+`start` - start tracking time
+`stop` - stop time tracking
+`s` - toggle start/stop a project
+`timecard` - get a timecard printout of time segments
+`archive` - don't show this project in printouts
+
+## In practice
+`tb` or `tb status` - gives a list of running timers  
 `tb new projname` - creates a new project  
-`tb new projname/subproj` - creates a new subproject  
+`tb new projname/sub` - creates a new subproject  
 `tb start projname` - starts tracking project  
+`tb start sub` - start a project based off of suffix
 `tb stop projname` - stops tracking project  
-`tb stats day` - show time tracked for the past day (also accepts week and month)  
+`tb stats 2 days` - show time tracked for the past 2 days (flexible, accepts hour/day/week/month/year)  
+`tb timecard projname 2 days` - similar to stats but 
 `tb archive projname` - archive a project  
 
 ## Installation
 1. Clone this repo
 2. Have Go installed
-3. Inside the repo, `go install`
+3. Inside the repo, run `$ go install`
 
 ## Other stuff
 All projects and segments are stored in `~/.tb.json`, should be pretty easy to edit or whatever you want to do with it.
@@ -34,9 +43,20 @@ $ tb start school/engl106
 ... time passes ...
 $ tb stop school/engl106
 $ tb stats day
-> logged school for 10m30s in the past day
-> logged school/cs250 for 7m25s in the past day
-> logged school/engl106 for 3m5s in the past day
+school for 38m16s in the past day
+↳ cs250 for 18m13s in the past day
+↳ engl106 for 20m3s in the past day
+$ tb timecard school/cs250
+Project        Date    Start      End        Duration
+school/cs250   01/16   09:14:00   09:32:13   18m13s
+-----------------------------------------------------
+Total duration: 18m13s in the past week
+$ tb timecard school
+Project          Date    Start      End        Duration
+school/cs250     01/16   09:14:00   09:32:13   18m13s
+school/engl106   01/16   00:14:21   00:34:24   20m3s
+-----------------------------------------------------
+Total duration: 38m16s in the past week
 ```
 
 lol idk if that makes sense but it works for me so you do you
