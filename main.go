@@ -1,3 +1,4 @@
+// TODO marshal/unmarshal pointers doesn't work too well, take them out if possible
 package main
 
 import (
@@ -6,20 +7,27 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
+)
+
+const (
+	DefaultDateFormat = "01/02"
+	DefaultTimeFormat = "15:04:05"
 )
 
 // TODO Maybe have some config in .tb.json? like l10n for 24h/ISO dates, format strings
 // TODO stats and status
 // TODO ideally we shouldn't be reading the whole json file on every operation
 // because most of them will just be starting/stopping.  The only time we do
-// need to read operations is when we're calculating times.
+// need to read operations is when we're calculating times.  the same kinda
+// goes with config.  However, I'd also like to keep everything to one file
+// which makes this a bit more difficult.
 func main() {
+	// TODO create file if it doesn't exist
 	path := os.Getenv("HOME") + "/.tb.json"
-	projects, err := loadProjects(path)
+	tb, err := load(path)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -27,14 +35,14 @@ func main() {
 
 	l := len(os.Args)
 	if l == 1 {
-		Status(projects)
+		Status(tb)
 	} else if l == 3 {
 		// ToLower will make commands case insensitive
 		command := strings.ToLower(os.Args[1])
 		projectName := os.Args[2]
 
 		var p *Project
-		p, err = FindProject(projects, projectName)
+		p, err = FindProject(tb, projectName)
 
 		if command == "new" {
 			if err == nil && p.Name == projectName {
@@ -44,7 +52,7 @@ func main() {
 				err = nil
 
 				p := Project{Name: projectName}
-				projects = append(projects, p)
+				tb.Projects = append(tb.Projects, p)
 				fmt.Printf("created project \"%s\"\n", p.Name)
 			}
 		}
@@ -66,7 +74,7 @@ func main() {
 				p.Start()
 			}
 		case "timecard":
-			err = p.PrintTimecard()
+			err = p.PrintTimecard(tb.Conf)
 		case "archive":
 			p.Archive()
 		}
@@ -77,11 +85,21 @@ func main() {
 		return
 	}
 
-	err = saveProjects(path, projects)
+	err = save(path, tb)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
+}
+
+type tbWrapper struct {
+	Conf     Config    `json:"config"`
+	Projects []Project `json:"projects"`
+}
+
+type Config struct {
+	DateFormat string `json:"dateFormat"`
+	TimeFormat string `json:"timeFormat"`
 }
 
 type Entry struct {
@@ -138,17 +156,16 @@ func (p *Project) Archive() {
 	fmt.Printf("archived \"%s\"\n", p.Name)
 }
 
-func (p *Project) PrintTimecard() (err error) {
+func (p *Project) PrintTimecard(config Config) (err error) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintf(w, "Date\tStart\tEnd\tDuration\n")
 
 	// TODO user inputted time range
 	entries := p.entriesSince(time.Now().AddDate(0, 0, -7))
 	for _, e := range entries {
-		date := strconv.Itoa(int(e.Start.Month())) + "/" + strconv.Itoa(e.Start.Day())
-		// TODO these things are wacci af
-		start := strconv.Itoa(e.Start.Hour()) + ":" + strconv.Itoa(e.Start.Minute()) + ":" + strconv.Itoa(e.Start.Second())
-		end := strconv.Itoa(e.End.Hour()) + ":" + strconv.Itoa(e.End.Minute()) + ":" + strconv.Itoa(e.End.Second())
+		date := e.Start.Format(config.DateFormat)
+		start := e.Start.Format(config.TimeFormat)
+		end := e.End.Format(config.TimeFormat)
 
 		var dur string
 		if e.End.IsZero() {
@@ -202,9 +219,9 @@ func (p *Project) durationSince(t time.Time) (d time.Duration) {
 	return d
 }
 
-func Status(projects []Project) {
+func Status(tb *tbWrapper) {
 	// TODO fix all this ish
-	for _, p := range projects {
+	for _, p := range tb.Projects {
 		name := p.Name
 		var spacing string
 
@@ -273,10 +290,10 @@ func Stats(projectName string) (err error) {
 
 // FindProject finds the first full match or suffix match of a project
 // TODO check for collisions when suffix matching?
-func FindProject(projects []Project, projectName string) (project *Project, err error) {
+func FindProject(tb *tbWrapper, projectName string) (project *Project, err error) {
 	index := -1
 
-	for i, e := range projects {
+	for i, e := range tb.Projects {
 		if e.Name == projectName {
 			index = i
 			break
@@ -289,26 +306,38 @@ func FindProject(projects []Project, projectName string) (project *Project, err 
 		return project, fmt.Errorf("no project named \"%s\" found", projectName)
 	}
 
-	return &projects[index], err
+	return &tb.Projects[index], err
 }
 
-func loadProjects(path string) (projects []Project, err error) {
+func load(path string) (tb *tbWrapper, err error) {
 	input, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return tb, err
 	}
 
-	err = json.Unmarshal(input, &projects)
-	return projects, err
+	err = json.Unmarshal(input, &tb)
+	if err != nil {
+		return tb, err
+	}
+
+	if tb.Conf.DateFormat == "" {
+		tb.Conf.DateFormat = DefaultDateFormat
+	}
+
+	if tb.Conf.TimeFormat == "" {
+		tb.Conf.TimeFormat = DefaultTimeFormat
+	}
+
+	return tb, err
 }
 
-func saveProjects(path string, projects []Project) (err error) {
+func save(path string, tb *tbWrapper) (err error) {
 	// Always sort projects by name before writing them
-	sort.Slice(projects, func(i, j int) bool {
-		return projects[i].Name < projects[j].Name
+	sort.Slice(tb.Projects, func(i, j int) bool {
+		return tb.Projects[i].Name < tb.Projects[j].Name
 	})
 
-	out, err := json.Marshal(projects)
+	out, err := json.Marshal(*tb)
 	if err != nil {
 		return err
 	}
