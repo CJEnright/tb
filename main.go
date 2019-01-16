@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -35,7 +37,7 @@ func main() {
 	l := len(os.Args)
 	if l == 1 {
 		Status(tb)
-	} else if l == 3 {
+	} else {
 		// ToLower will make commands case insensitive
 		command := strings.ToLower(os.Args[1])
 		projectName := os.Args[2]
@@ -164,11 +166,12 @@ func (p *Project) Archive() {
 }
 
 func (p *Project) PrintTimecard(config Config) (err error) {
+	since := ParseTimeString()
+
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintf(w, "Date\tStart\tEnd\tDuration\n")
 
-	// TODO user inputted time range
-	entries := p.entriesSince(time.Now().AddDate(0, 0, -7))
+	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
 		date := e.Start.Format(config.DateFormat)
 		start := e.Start.Format(config.TimeFormat)
@@ -186,10 +189,8 @@ func (p *Project) PrintTimecard(config Config) (err error) {
 	w.Flush()
 
 	fmt.Println("---------------------------------------")
-	// TODO user inputted time range
-	durSince := p.durationSince(time.Now().AddDate(0, 0, -7)).Truncate(time.Second)
-	// TODO have this say how far back duration goes
-	fmt.Printf("Total duration: %s\n", durSince)
+	durSince := p.durationSince(time.Now().Add(since)).Truncate(time.Second)
+	fmt.Printf("Total duration: %s since %s\n", durSince, since.String())
 	return err
 }
 
@@ -381,6 +382,32 @@ func save(path string, tb *tbWrapper) (err error) {
 
 	err = ioutil.WriteFile(path, out, 0644)
 	return err
+}
+
+func ParseTimeString() (dur time.Duration) {
+	timeString := strings.ToLower(strings.Join(os.Args[3:], " "))
+	switch {
+	case strings.Contains(timeString, "hour"):
+		dur = time.Since(time.Now().Add(-time.Hour))
+	case strings.Contains(timeString, "day"):
+		dur = time.Since(time.Now().AddDate(0, 0, -1))
+	case strings.Contains(timeString, "week"):
+		dur = time.Since(time.Now().AddDate(0, 0, -7))
+	case strings.Contains(timeString, "month"):
+		dur = time.Since(time.Now().AddDate(0, -1, 0))
+	case strings.Contains(timeString, "year"):
+		dur = time.Since(time.Now().AddDate(-1, 0, 0))
+	default:
+		dur = time.Since(time.Now().AddDate(0, 0, -7))
+	}
+
+	r := regexp.MustCompile("[0-9]+")
+	mult, _ := strconv.Atoi(r.FindString(timeString))
+	if mult < 1 {
+		mult = 1
+	}
+
+	return dur * time.Duration(mult)
 }
 
 func Contains(s []string, e string) bool {
