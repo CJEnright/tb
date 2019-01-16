@@ -102,7 +102,7 @@ func main() {
 			}
 			didEdit = true
 		case "timecard":
-			err = p.PrintTimecard(tb.Conf, tb.Projects)
+			p.Timecard(tb.Conf, tb.Projects)
 		case "archive":
 			p.Archive()
 			didEdit = true
@@ -187,7 +187,7 @@ func (p *Project) Archive() {
 	fmt.Printf("archived \"%s\"\n", p.Name)
 }
 
-func (p *Project) PrintTimecard(config Config, projects []Project) (err error) {
+func (p *Project) Timecard(config Config, projects []Project) {
 	since := ParseTimeString(3)
 
 	var sinceString string
@@ -198,8 +198,23 @@ func (p *Project) PrintTimecard(config Config, projects []Project) (err error) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintf(w, "Date\tStart\tEnd\tDuration\n")
+	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\n")
 
+	p.PrintTimecard(w, since, config, projects)
+	for _, c := range projects {
+		if strings.Contains(c.Name, p.Name+"/") {
+			c.PrintTimecard(w, since, config, projects)
+		}
+	}
+
+	w.Flush()
+	fmt.Println("-----------------------------------------------------")
+	dur := p.durationSince(time.Now().Add(-since), projects).Truncate(time.Second)
+	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceString)
+}
+
+// TODO have this count children and add a name column
+func (p *Project) PrintTimecard(w *tabwriter.Writer, since time.Duration, config Config, projects []Project) {
 	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
 		date := e.Start.Format(config.DateFormat)
@@ -213,15 +228,8 @@ func (p *Project) PrintTimecard(config Config, projects []Project) (err error) {
 			dur = e.Duration.Truncate(time.Second).String()
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t\n", date, start, end, dur)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t\n", p.Name, date, start, end, dur)
 	}
-	w.Flush()
-
-	fmt.Println("---------------------------------------")
-	dur := p.durationSince(time.Now().Add(-since), projects).Truncate(time.Second)
-	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceString)
-
-	return err
 }
 
 func (p *Project) entriesSince(t time.Time) (entries []Entry) {
@@ -255,7 +263,6 @@ func (p *Project) durationSince(t time.Time, projects []Project) (d time.Duratio
 	return d
 }
 
-// TODO show heirarchy of parents or whatever
 func Status(tb *tbWrapper) {
 	for _, p := range tb.Projects {
 		if p.Active {
@@ -319,7 +326,7 @@ func FindProject(tb *tbWrapper, projectName string) (project *Project, err error
 			fmt.Printf("multiple projects found with suffix \"%s\":\n", projectName)
 
 			for i, v := range potentialIndexes {
-				fmt.Printf("%d. %s\n", i+1, tb.Projects[v].Name)
+				fmt.Printf("(%d) %s\n", i+1, tb.Projects[v].Name)
 			}
 
 			_, err := fmt.Scanln(&response)
