@@ -1,4 +1,3 @@
-// TODO marshal/unmarshal pointers doesn't work too well, take them out if possible
 package main
 
 import (
@@ -17,7 +16,6 @@ const (
 	DefaultTimeFormat = "15:04:05"
 )
 
-// TODO Maybe have some config in .tb.json? like l10n for 24h/ISO dates, format strings
 // TODO stats and status
 // TODO ideally we shouldn't be reading the whole json file on every operation
 // because most of them will just be starting/stopping.  The only time we do
@@ -298,24 +296,38 @@ func Stats(projectName string) (err error) {
 */
 
 // FindProject finds the first full match or suffix match of a project
-// TODO check for collisions when suffix matching?
 func FindProject(tb *tbWrapper, projectName string) (project *Project, err error) {
-	index := -1
+	var potentialIndexes []int
 
 	for i, e := range tb.Projects {
 		if e.Name == projectName {
-			index = i
-			break
-		} else if strings.HasSuffix(e.Name, projectName) && index == -1 {
-			index = i
+			return &tb.Projects[i], err
+		} else if strings.HasSuffix(e.Name, projectName) {
+			potentialIndexes = append(potentialIndexes, i)
 		}
 	}
 
-	if index == -1 {
-		return project, fmt.Errorf("no project named \"%s\" found", projectName)
+	if len(potentialIndexes) > 1 {
+		response := 0
+		for response < 1 || response > len(potentialIndexes) {
+			fmt.Printf("multiple projects found for \"%s\":\n", projectName)
+
+			for i, v := range potentialIndexes {
+				fmt.Printf("%d. %s\n", i+1, tb.Projects[v].Name)
+			}
+
+			_, err := fmt.Scanln(&response)
+			if err != nil {
+				return project, err
+			}
+
+			return &tb.Projects[potentialIndexes[response-1]], err
+		}
+	} else if len(potentialIndexes) == 1 {
+		return &tb.Projects[potentialIndexes[0]], err
 	}
 
-	return &tb.Projects[index], err
+	return project, fmt.Errorf("no project named \"%s\" found", projectName)
 }
 
 func load(path string) (tb *tbWrapper, err error) {
