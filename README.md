@@ -4,7 +4,7 @@ Bit of a time tracking meme
 ## Commands
 `stats` - stats for all projects in a time period
 `new` - create a new project
-`start` - start tracking time
+`start` - start tracking time.  You can also add notes
 `stop` - stop time tracking
 `s` - toggle start/stop a project
 `timecard` - get a timecard printout of time segments
@@ -16,6 +16,7 @@ Bit of a time tracking meme
 `tb new projname/sub` - creates a new subproject  
 `tb start projname` - starts tracking project  
 `tb start sub` - start a project based off of suffix
+`tb start sub reponding to email` - start a project based off of suffix.  The part after "sub" are the notes
 `tb stop projname` - stops tracking project  
 `tb stats 2 days` - show time tracked for the past 2 days (flexible, accepts hour/day/week/month/year)  
 `tb timecard projname 2 days` - similar to stats but 

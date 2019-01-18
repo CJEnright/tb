@@ -137,6 +137,7 @@ type Entry struct {
 	Start    time.Time     `json:"start"`
 	End      time.Time     `json:"end"`
 	Duration time.Duration `json:"duration"`
+	Notes    string        `json:"notes"`
 }
 
 func (s *Entry) FindDuration() {
@@ -156,6 +157,9 @@ func (p *Project) Start() (err error) {
 		return fmt.Errorf("project \"%s\" is already running", p.Name)
 	} else {
 		e := Entry{Start: time.Now()}
+		if len(os.Args) > 3 {
+			e.Notes = strings.Join(os.Args[3:], " ")
+		}
 		p.Entries = append(p.Entries, e)
 		p.Active = true
 
@@ -198,7 +202,7 @@ func (p *Project) Timecard(config Config, projects []Project) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\n")
+	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\tNotes\n")
 
 	p.PrintTimecard(w, since, config, projects)
 	for _, c := range projects {
@@ -208,12 +212,11 @@ func (p *Project) Timecard(config Config, projects []Project) {
 	}
 
 	w.Flush()
-	fmt.Println("-----------------------------------------------------")
+	fmt.Printf("%s\n", strings.Repeat("=", 75))
 	dur := p.durationSince(time.Now().Add(-since), projects).Truncate(time.Second)
 	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceString)
 }
 
-// TODO have this count children and add a name column
 func (p *Project) PrintTimecard(w *tabwriter.Writer, since time.Duration, config Config, projects []Project) {
 	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
@@ -228,7 +231,7 @@ func (p *Project) PrintTimecard(w *tabwriter.Writer, since time.Duration, config
 			dur = e.Duration.Truncate(time.Second).String()
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t\n", p.Name, date, start, end, dur)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t\n", p.Name, date, start, end, dur, e.Notes)
 	}
 }
 
