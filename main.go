@@ -42,6 +42,14 @@ func main() {
 		switch command {
 		case "stats":
 			Stats(tb.Projects)
+		case "refresh":
+			for i, _ := range tb.Projects {
+				for j, _ := range tb.Projects[i].Entries {
+					tb.Projects[i].Entries[j].FindDuration()
+				}
+			}
+
+			didEdit = true
 		}
 	} else {
 		// ToLower will make commands case insensitive
@@ -140,8 +148,8 @@ type Entry struct {
 	Notes    string        `json:"notes"`
 }
 
-func (s *Entry) FindDuration() {
-	s.Duration = s.End.Sub(s.Start)
+func (e *Entry) FindDuration() {
+	e.Duration = e.End.Sub(e.Start)
 }
 
 type Project struct {
