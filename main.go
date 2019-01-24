@@ -202,7 +202,7 @@ func (p *Project) Timecard(config Config, projects []Project) {
 
 	p.PrintTimecard(w, since, config, projects)
 	for _, c := range projects {
-		if strings.Contains(c.Name, p.Name+"/") {
+		if strings.Contains(c.Name, p.Name+"/") && !c.Archived {
 			c.PrintTimecard(w, since, config, projects)
 		}
 	}
@@ -255,7 +255,7 @@ func (p *Project) durationSince(t time.Time, projects []Project) (d time.Duratio
 
 	// Calculate time of all children (projects with name p.Name/*)
 	for _, c := range projects {
-		if strings.Contains(c.Name, p.Name+"/") {
+		if strings.Contains(c.Name, p.Name+"/") && !c.Archived {
 			d += c.durationSince(t, projects)
 		}
 	}
