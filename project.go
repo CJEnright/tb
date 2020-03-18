@@ -16,6 +16,8 @@ var (
 
 // A Project keeps track of a list of time segments, each representing
 // a unit of tracked time.
+// Note that Projects are NOT hierarchical.  They are all flat with a pseudo-
+// hierarchy created using "/".
 type Project struct {
 	Name    string  `json:"name"`
 	Entries []Entry `json:"entries"`
@@ -121,23 +123,23 @@ func (p *Project) entriesSince(t time.Time) (entries []Entry) {
 }
 
 // TODO Wait why do we take in a []Project?
-func (p *Project) durationSince(t time.Time, projects []Project) (d time.Duration) {
+func (p *Project) durationSince(t time.Time, projects []Project) (dur time.Duration) {
 	// Calculate own time
 	for _, s := range p.Entries {
 		if s.End.IsZero() {
 			// If an entry hasn't ended, just count the time from start to now
-			d += time.Now().Sub(s.Start)
+			dur += time.Now().Sub(s.Start)
 		} else if t.Before(s.Start) {
-			d += s.Duration
+			dur += s.Duration
 		}
 	}
 
 	// Calculate time of all children (projects with name p.Name/*)
 	for _, c := range projects {
 		if strings.Contains(c.Name, p.Name+"/") && !c.IsArchived {
-			d += c.durationSince(t, projects)
+			dur += c.durationSince(t, projects)
 		}
 	}
 
-	return d
+	return dur
 }

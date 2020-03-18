@@ -16,14 +16,41 @@ const (
 	DefaultTimeFormat = "15:04:05"
 )
 
+type Config struct {
+	DateFormat string `json:"date_format"`
+	TimeFormat string `json:"time_format"`
+}
+
 type tbWrapper struct {
 	Conf     Config    `json:"config"`
 	Projects []Project `json:"projects"`
 }
 
-type Config struct {
-	DateFormat string `json:"date_format"`
-	TimeFormat string `json:"time_format"`
+func (tb *tbWrapper) New(name string) error {
+	p, err := FindProject(tb, name)
+	if err == nil && p.Name == name {
+		fmt.Printf("project with name \"%s\" already exists\n", p.Name)
+		return err
+	} else {
+		// Add base projects so stats come out right
+		roots := strings.Split(name, "/")
+		for i := 0; i < len(roots)-1; i++ {
+			combined := strings.Join(roots[:i+1], "/")
+			// Make sure project with this name doesn't exist
+			_, err = FindProject(tb, combined)
+			if err != nil {
+				p := Project{Name: combined}
+				tb.Projects = append(tb.Projects, p)
+			}
+		}
+
+		p := Project{Name: name}
+		tb.Projects = append(tb.Projects, p)
+
+		fmt.Printf("created project \"%s\"\n", p.Name)
+	}
+
+	return err
 }
 
 // Status shows which projects are currently running.
