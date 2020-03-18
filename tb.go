@@ -27,7 +27,7 @@ type tbWrapper struct {
 }
 
 func (tb *tbWrapper) New(name string) error {
-	p, err := FindProject(tb, name)
+	p, err := tb.FindProject(name)
 	if err == nil && p.Name == name {
 		fmt.Printf("project with name \"%s\" already exists\n", p.Name)
 		return err
@@ -37,7 +37,7 @@ func (tb *tbWrapper) New(name string) error {
 		for i := 0; i < len(roots)-1; i++ {
 			combined := strings.Join(roots[:i+1], "/")
 			// Make sure project with this name doesn't exist
-			_, err = FindProject(tb, combined)
+			_, err = tb.FindProject(combined)
 			if err != nil {
 				p := Project{Name: combined}
 				tb.Projects = append(tb.Projects, p)
@@ -100,10 +100,14 @@ func Stats(projects []Project) {
 }
 
 // FindProject finds the first full match or suffix match of a project
-func FindProject(tb *tbWrapper, projectName string) (project *Project, err error) {
+func (tb *tbWrapper) FindProject(name string) (project *Project, err error) {
 	var potentialIndexes []int
 
-	for i, e := range tb.Projects {
+	split := strings.Split(name, "/")
+
+	for _, p := range tb.Projects {
+		p.findProject(name)
+
 		if e.Name == projectName {
 			return &tb.Projects[i], err
 		} else if strings.HasSuffix(e.Name, projectName) {

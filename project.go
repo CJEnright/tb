@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -22,11 +21,13 @@ type Project struct {
 	Name    string  `json:"name"`
 	Entries []Entry `json:"entries"`
 
+	Children []Project `json:"children"`
+
 	IsRunning  bool `json:"is_running"`
 	IsArchived bool `json:"is_archived"`
 }
 
-// Start starts time tracking a project
+// Start starts time tracking a project.  Does not start its children.
 func (p *Project) Start() (err error) {
 	if p.IsRunning {
 		return ErrAlreadyStarted
@@ -41,7 +42,7 @@ func (p *Project) Start() (err error) {
 	return err
 }
 
-// Stop stops time tracking a project
+// Stop stops time tracking a project.  Does not stop its children.
 func (p *Project) Stop() (err error) {
 	if p.IsRunning {
 		p.Entries[len(p.Entries)-1].End = time.Now()
@@ -57,34 +58,29 @@ func (p *Project) Stop() (err error) {
 	return err
 }
 
-// Archive hides a project and all its children
+// Archive hides a project and all its children.
 func (p *Project) Archive() {
 	p.IsRunning = false
 	p.IsArchived = true
 
-	/*
-		// TODO can't do until projects are made hierarchical
-		for _, c := range p.projects {
-			if strings.Contains(c.Name, p.Name+"/") {
-				c.Archive()
-			}
-		}
-	*/
+	for _, c := range p.Children {
+		c.Archive()
+	}
 
 	fmt.Printf("archived \"%s\"\n", p.Name)
 }
 
 // Timecard prints all the entries for a project.
-func (p *Project) Timecard(config Config, projects []Project) {
+func (p *Project) Timecard(config Config) {
 	since, sinceStr := parseTimeString(3)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\n")
 
 	p.printTimecard(w, since, config, projects)
-	for _, c := range projects {
-		if strings.Contains(c.Name, p.Name+"/") && !c.IsArchived {
-			c.printTimecard(w, since, config, projects)
+	for _, c := range p.Children {
+		if !c.IsArchived {
+			c.printTimecard(w, since, config)
 		}
 	}
 
@@ -94,7 +90,7 @@ func (p *Project) Timecard(config Config, projects []Project) {
 	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceStr)
 }
 
-func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config Config, projects []Project) {
+func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config Config) {
 	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
 		date := e.Start.Format(config.DateFormat)
@@ -112,6 +108,8 @@ func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config
 	}
 }
 
+// entriesSince returns the entries since a specific time.  It doesn't return the
+// entries for its children.
 func (p *Project) entriesSince(t time.Time) (entries []Entry) {
 	for _, s := range p.Entries {
 		if t.Before(s.Start) {
@@ -122,8 +120,9 @@ func (p *Project) entriesSince(t time.Time) (entries []Entry) {
 	return entries
 }
 
-// TODO Wait why do we take in a []Project?
-func (p *Project) durationSince(t time.Time, projects []Project) (dur time.Duration) {
+// durationSince calculates the duration a project and all its children have been
+// running for since a specific date
+func (p *Project) durationSince(t time.Time) (dur time.Duration) {
 	// Calculate own time
 	for _, s := range p.Entries {
 		if s.End.IsZero() {
@@ -134,12 +133,15 @@ func (p *Project) durationSince(t time.Time, projects []Project) (dur time.Durat
 		}
 	}
 
-	// Calculate time of all children (projects with name p.Name/*)
-	for _, c := range projects {
-		if strings.Contains(c.Name, p.Name+"/") && !c.IsArchived {
+	for _, c := range p.Children {
+		if !c.IsArchived {
 			dur += c.durationSince(t, projects)
 		}
 	}
 
 	return dur
+}
+
+func (p *Project) findProject(name string) *Project {
+
 }
