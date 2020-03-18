@@ -1,7 +1,7 @@
 BINARY_NAME=tb
 
 build:
-	go build -o $(BINARY_NAME) -v
+	go build -v -o $(BINARY_NAME) ./cmd/tb
 
 install:
 	go install
