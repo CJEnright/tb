@@ -8,19 +8,22 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 )
 
 const (
-	DefaultDateFormat = "01/02"
+	DefaultDateFormat = "01/22"
 	DefaultTimeFormat = "15:04:05"
 )
 
+// A Config defines how date and times are formatted
 type Config struct {
 	DateFormat string `json:"date_format"`
 	TimeFormat string `json:"time_format"`
 }
 
+// A tbWrapper wraps a Config and a list of projects
 type tbWrapper struct {
 	Conf     Config    `json:"config"`
 	Projects []Project `json:"projects"`
@@ -33,9 +36,9 @@ func (tb *tbWrapper) New(name string) error {
 		return err
 	} else {
 		// Add base projects so stats come out right
-		roots := strings.Split(name, "/")
-		for i := 0; i < len(roots)-1; i++ {
-			combined := strings.Join(roots[:i+1], "/")
+		slashes := strings.Split(name, "/")
+		for i := 0; i < len(slashes)-1; i++ {
+			combined := strings.Join(slashes[:i+1], "/")
 			// Make sure project with this name doesn't exist
 			_, err = tb.FindProject(combined)
 			if err != nil {
@@ -48,96 +51,68 @@ func (tb *tbWrapper) New(name string) error {
 		tb.Projects = append(tb.Projects, p)
 
 		fmt.Printf("created project \"%s\"\n", p.Name)
+		err = nil
 	}
 
 	return err
 }
 
 // Status shows which projects are currently running.
-func Status(tb *tbWrapper) {
+func (tb *tbWrapper) Status() {
 	for _, p := range tb.Projects {
-		if p.IsRunning {
-			fmt.Printf("%s is running\n", p.Name)
-		}
+		p.Status()
 	}
 }
 
 // Stats prints the amount of time logged for each project.
-func Stats(projects []Project) {
-	var since time.Duration
-	var durString string
+func (tb *tbWrapper) Stats() {
+	var dur time.Duration
+	durString := "week"
 	if len(os.Args) < 3 {
-		since = time.Since(time.Now().AddDate(0, 0, -7))
+		dur = time.Since(time.Now().AddDate(0, 0, -7))
 	} else {
-		since, durString = parseTimeString(2)
+		dur, durString = parseTimeString(2)
 	}
 
-	for _, p := range projects {
-		if !p.IsArchived {
-			var spacing string
-			slashes := strings.Count(p.Name, "/")
-			for i := 1; i < slashes; i++ {
-				spacing += "  "
-			}
+	fmt.Printf("Stats for the past %s:\n", durString)
 
-			name := p.Name
-			if slashes > 0 {
-				spacing += "↳ "
-
-				name = name[strings.LastIndex(name, "/")+1 : len(name)]
-			}
-
-			dur := p.durationSince(time.Now().Add(-since), projects)
-			fmt.Printf(
-				"%s%s for %s in the past %s\n",
-				spacing,
-				name,
-				dur.Truncate(time.Second).String(),
-				durString,
-			)
-		}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	for _, p := range tb.Projects {
+		p.Stats(w, "", dur, durString)
 	}
+	w.Flush()
 }
 
-// FindProject finds the first full match or suffix match of a project
-func (tb *tbWrapper) FindProject(name string) (project *Project, err error) {
-	var potentialIndexes []int
-
-	split := strings.Split(name, "/")
-
+// FindProject finds a project that either has the prefix name or has
+// a full path name equal to the name parameter.
+func (tb *tbWrapper) FindProject(name string) (*Project, error) {
+	matches := []*Project{}
 	for _, p := range tb.Projects {
-		p.findProject(name)
-
-		if e.Name == projectName {
-			return &tb.Projects[i], err
-		} else if strings.HasSuffix(e.Name, projectName) {
-			// Gather all that have a matching prefix
-			potentialIndexes = append(potentialIndexes, i)
-		}
+		matches = append(matches, p.findProject(name)...)
 	}
 
-	if len(potentialIndexes) > 1 {
+	if len(matches) > 1 {
 		selection := 0
 
-		for selection < 1 || selection > len(potentialIndexes) {
-			fmt.Printf("multiple projects found with suffix \"%s\":\n", projectName)
+		for selection < 1 || selection > len(matches) {
+			fmt.Printf("multiple projects found with suffix \"%s\":\n", name)
 
-			for i, v := range potentialIndexes {
-				fmt.Printf("(%d) %s\n", i+1, tb.Projects[v].Name)
+			for i, v := range matches {
+				fmt.Printf("(%d) %s\n", i+1, v.Name)
 			}
 
 			_, err := fmt.Scanln(&selection)
 			if err != nil {
-				return project, err
+				return nil, err
 			}
 		}
 
-		return &tb.Projects[potentialIndexes[selection-1]], err
-	} else if len(potentialIndexes) == 1 {
-		return &tb.Projects[potentialIndexes[0]], err
+		return matches[selection-1], nil
+	} else if len(matches) == 1 {
+		return matches[0], nil
+	} else {
+		return nil, ErrProjectNotFound
 	}
-
-	return project, ErrProjectNotFound
 }
 
 // parseTimeString finds a duration from strings like
@@ -215,6 +190,8 @@ var (
 	yearAbbrvs  = []string{"year", "yr", "y"}
 )
 
+// abbrvToDuration converts what might be an abbreviated unit of time
+// (like hr or h) to a known unit of time.
 func abbrvToDuration(input string) (dur time.Duration, s string) {
 	switch {
 	case containsAny(input, hourAbbrvs):
@@ -241,6 +218,7 @@ func abbrvToDuration(input string) (dur time.Duration, s string) {
 	return dur, s
 }
 
+// Load loads a file for editing time tracking information.
 func Load(path string) (tb *tbWrapper, err error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		f, err := os.Create(path)
@@ -278,7 +256,8 @@ func Load(path string) (tb *tbWrapper, err error) {
 	return tb, err
 }
 
-func Save(path string, tb *tbWrapper) (err error) {
+// Save writes a tb file for long term storage.
+func (tb *tbWrapper) Save(path string) (err error) {
 	// Always sort projects by name before writing them
 	sort.Slice(tb.Projects, func(i, j int) bool {
 		return tb.Projects[i].Name < tb.Projects[j].Name

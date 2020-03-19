@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -15,16 +16,25 @@ var (
 
 // A Project keeps track of a list of time segments, each representing
 // a unit of tracked time.
-// Note that Projects are NOT hierarchical.  They are all flat with a pseudo-
-// hierarchy created using "/".
 type Project struct {
-	Name    string  `json:"name"`
+	Name    string  `json:"name"` // Full path to the project, including parent names
 	Entries []Entry `json:"entries"`
 
 	Children []Project `json:"children"`
 
 	IsRunning  bool `json:"is_running"`
 	IsArchived bool `json:"is_archived"`
+}
+
+// Status prints whether or not a project is running currently.
+func (p *Project) Status() {
+	if p.IsRunning {
+		fmt.Printf("%s is running\n", p.Name)
+	}
+
+	for _, c := range p.Children {
+		c.Status()
+	}
 }
 
 // Start starts time tracking a project.  Does not start its children.
@@ -70,6 +80,29 @@ func (p *Project) Archive() {
 	fmt.Printf("archived \"%s\"\n", p.Name)
 }
 
+func (p *Project) Stats(w *tabwriter.Writer, padding string, dur time.Duration, durString string) {
+	if !p.IsArchived {
+		name := p.Name
+		if padding != "" {
+			padding += "↳ "
+			name = name[strings.LastIndex(name, "/")+1 : len(name)]
+		}
+
+		dur := p.durationSince(time.Now().Add(-dur))
+		fmt.Fprintf(
+			w,
+			"%s%s\t%s\n",
+			padding,
+			name,
+			dur.Truncate(time.Second).String(),
+		)
+	}
+
+	for _, c := range p.Children {
+		c.Stats(w, padding+"  ", dur, durString)
+	}
+}
+
 // Timecard prints all the entries for a project.
 func (p *Project) Timecard(config Config) {
 	since, sinceStr := parseTimeString(3)
@@ -77,7 +110,7 @@ func (p *Project) Timecard(config Config) {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\n")
 
-	p.printTimecard(w, since, config, projects)
+	p.printTimecard(w, since, config)
 	for _, c := range p.Children {
 		if !c.IsArchived {
 			c.printTimecard(w, since, config)
@@ -86,7 +119,7 @@ func (p *Project) Timecard(config Config) {
 
 	w.Flush()
 	fmt.Println("-----------------------------------------------------")
-	dur := p.durationSince(time.Now().Add(-since), projects).Truncate(time.Second)
+	dur := p.durationSince(time.Now().Add(-since)).Truncate(time.Second)
 	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceStr)
 }
 
@@ -135,13 +168,27 @@ func (p *Project) durationSince(t time.Time) (dur time.Duration) {
 
 	for _, c := range p.Children {
 		if !c.IsArchived {
-			dur += c.durationSince(t, projects)
+			dur += c.durationSince(t)
 		}
 	}
 
 	return dur
 }
 
-func (p *Project) findProject(name string) *Project {
+func (p *Project) findProject(name string) []*Project {
+	// Invariant: no two projects should ever have the exact same full path
+	// name.  This is enforced by tbWrapper.New()
 
+	// Keeps both exact and suffix matches
+	matches := []*Project{}
+	for _, c := range p.Children {
+		c.findProject(name)
+		matches = append(matches, c.findProject(name)...)
+	}
+
+	if p.Name == name || strings.HasSuffix(p.Name, name) {
+		matches = append(matches, p)
+	}
+
+	return matches
 }
