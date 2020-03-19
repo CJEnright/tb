@@ -154,7 +154,7 @@ func (p *Project) entriesSince(t time.Time) (entries []Entry) {
 }
 
 // durationSince calculates the duration a project and all its children have been
-// running for since a specific date
+// running for since a specific date.
 func (p *Project) durationSince(t time.Time) (dur time.Duration) {
 	// Calculate own time
 	for _, s := range p.Entries {

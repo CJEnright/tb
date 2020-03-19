@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	DefaultDateFormat = "01/22"
-	DefaultTimeFormat = "15:04:05"
+	DefaultDateFormat = "1/31"     // Month/Day
+	DefaultTimeFormat = "15:04:05" // HH:MM:SS, 24 hr
 )
 
 // A Config defines how date and times are formatted
@@ -25,8 +25,8 @@ type Config struct {
 
 // A tbWrapper wraps a Config and a list of projects
 type tbWrapper struct {
-	Conf     Config    `json:"config"`
-	Projects []Project `json:"projects"`
+	Conf     Config     `json:"config"`
+	Projects []*Project `json:"projects"`
 }
 
 func (tb *tbWrapper) New(name string) error {
@@ -43,12 +43,12 @@ func (tb *tbWrapper) New(name string) error {
 			_, err = tb.FindProject(combined)
 			if err != nil {
 				p := Project{Name: combined}
-				tb.Projects = append(tb.Projects, p)
+				tb.Projects = append(tb.Projects, &p)
 			}
 		}
 
 		p := Project{Name: name}
-		tb.Projects = append(tb.Projects, p)
+		tb.Projects = append(tb.Projects, &p)
 
 		fmt.Printf("created project \"%s\"\n", p.Name)
 		err = nil
