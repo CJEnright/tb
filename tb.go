@@ -173,8 +173,10 @@ func parseTimeString(argStartIndex int) (dur time.Duration, cleanString string) 
 
 // Check if a string contains any of the strings in an array
 func containsAny(e string, s []string) bool {
+	lowerE := strings.ToLower(e)
+
 	for _, v := range s {
-		if strings.Contains(e, v) {
+		if strings.Contains(lowerE, v) {
 			return true
 		}
 	}
