@@ -125,9 +125,11 @@ func (p *Project) Stats(w *tabwriter.Writer, padding string, dur time.Duration, 
 	if !p.IsArchived {
 		name := p.Name
 		arrow := ""
-		if padding != "" {
+
+		if name == "" {
+			name = "Total"
+		} else {
 			arrow = "↳ "
-			name = name[strings.LastIndex(name, "/")+1 : len(name)]
 		}
 
 		dur := p.durationSince(time.Now().Add(-dur))
@@ -222,43 +224,24 @@ func (p *Project) durationSince(t time.Time) (dur time.Duration) {
 	return dur
 }
 
-// TODO this got janky with hierarchy
-/*
-func (p *Project) FindProjects(name string) []*Project {
-	// Keeps both exact and suffix matches
-	matches := []*Project{}
-
-	recName := name
-	if strings.HasPrefix(name, "/"+p.Name) {
-		recName = strings.TrimPrefix(name, "/"+p.Name)
-	}
-
-	for _, c := range p.Children {
-		matches = append(matches, c.FindProjects(recName)...)
-	}
-
-	if p.Name == name || strings.HasSuffix(p.Name, name) {
+func (p *Project) FindProjects(name string) (matches []*Project) {
+	if name == p.Name || strings.HasSuffix(p.Name, name) {
 		matches = append(matches, p)
 	}
 
-	return matches
-}
-*/
-func (p *Project) FindProjects(name string) []*Project {
-	if name == p.Name || strings.HasSuffix(p.Name, name) {
-		return []*Project{p}
-	} else if strings.HasPrefix(name, p.Name+"/") {
-		matches := []*Project{}
+	if strings.HasPrefix(name, p.Name+"/") {
+		trimmedName := strings.TrimPrefix(name, p.Name+"/")
 
-		name = strings.TrimPrefix(name, p.Name+"/")
-
+		for _, c := range p.Children {
+			matches = append(matches, c.FindProjects(trimmedName)...)
+		}
+	} else {
 		for _, c := range p.Children {
 			matches = append(matches, c.FindProjects(name)...)
 		}
-		return matches
-	} else {
-		return []*Project{}
 	}
+
+	return matches
 }
 
 // recalculate the duration of all entries.
@@ -267,8 +250,8 @@ func (p *Project) RecalculateEntires() {
 		c.RecalculateEntires()
 	}
 
-	for _, e := range p.Entries {
-		e.CalculateDuration()
+	for i, _ := range p.Entries {
+		p.Entries[i].CalculateDuration()
 	}
 }
 

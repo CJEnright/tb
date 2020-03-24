@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/cjenright/tb"
-	"github.com/cjenright/tb/migrations"
 )
 
 const (
@@ -84,13 +83,6 @@ func main() {
 
 	didEdit := false
 
-	if tbw.Conf.Version != tb.CurrentVersion {
-		fmt.Println("Migrating")
-		// TODO ask for permission and describe changes
-		migrations.Migrate(tbw)
-		didEdit = true
-	}
-
 	l := len(os.Args)
 	if l == 1 {
 		tbw.Status()
@@ -104,6 +96,7 @@ func main() {
 			fmt.Println(helpText)
 		case "recalc", "recalculate":
 			tbw.Recalculate()
+			didEdit = true
 		}
 	} else {
 		command := strings.ToLower(os.Args[1])

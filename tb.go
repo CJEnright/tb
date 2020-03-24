@@ -26,9 +26,8 @@ type Config struct {
 
 // A TBWrapper wraps a Config and a list of projects
 type TBWrapper struct {
-	Conf     *Config    `json:"config"`
-	Root     *Project   `json:"root"`
-	Projects []*Project `json:"projects"`
+	Conf *Config  `json:"config"`
+	Root *Project `json:"root"`
 }
 
 func (tb *TBWrapper) New(name string) error {
