@@ -4,31 +4,66 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
 )
 
 var (
-	ErrAlreadyStarted  = errors.New("project is already running")
-	ErrProjectNotFound = errors.New("no project with that name found")
+	ErrAlreadyStarted       = errors.New("project is already running")
+	ErrProjectNotFound      = errors.New("no project with that name found")
+	ErrProjectAlreadyExists = errors.New("a project with that name already exists")
 )
 
-// A Project keeps track of a list of time segments, each representing
-// a unit of tracked time.
+// A Project keeps track of a list of children project and time segments, each
+// representing a unit of tracked time.
 type Project struct {
-	Name    string  `json:"name"` // Full path to the project, including parent names
+	Name       string `json:"name"`
+	IsRunning  bool   `json:"is_running"`
+	IsArchived bool   `json:"is_archived"`
+
 	Entries []Entry `json:"entries"`
 
-	Children []Project `json:"children"`
+	Children []*Project `json:"children"`
+}
 
-	IsRunning  bool `json:"is_running"`
-	IsArchived bool `json:"is_archived"`
+// New creates a new project either as a direct child of this project or as
+// a child of a more distant child. It returns true if the new project was
+// created as a child project of the current project, and false if it was not.
+func (p *Project) New(name string) (added bool, err error) {
+	if name == p.Name {
+		return false, ErrProjectAlreadyExists
+	} else if strings.HasPrefix(name, p.Name+"/") {
+		name = strings.TrimPrefix(name, p.Name+"/")
+
+		for _, c := range p.Children {
+			added, err = c.New(name)
+			if added || err != nil {
+				return added, err
+			}
+		}
+
+		// Didn't fit any child, add it to this project
+		newProj := &Project{Name: name}
+		// If the new name still has /s then create those intermediary projects
+		if split := strings.Split(name, "/"); len(split) > 1 {
+			for i := len(split) - 1; i >= 0; i-- {
+				newProj = &Project{Name: split[i], Children: []*Project{newProj}}
+			}
+		}
+
+		p.Children = append(p.Children, newProj)
+		return true, nil
+	} else {
+		return false, nil
+	}
 }
 
 // Status prints whether or not a project is running currently.
 func (p *Project) Status() {
 	if p.IsRunning {
+		// TODO should say how long it's been running
 		fmt.Printf("%s is running\n", p.Name)
 	}
 
@@ -37,7 +72,7 @@ func (p *Project) Status() {
 	}
 }
 
-// Start starts time tracking a project.  Does not start its children.
+// Start starts time tracking a project. It does not start its children.
 func (p *Project) Start() (err error) {
 	if p.IsRunning {
 		return ErrAlreadyStarted
@@ -52,7 +87,7 @@ func (p *Project) Start() (err error) {
 	return err
 }
 
-// Stop stops time tracking a project.  Does not stop its children.
+// Stop stops time tracking a project. It does not stop its children.
 func (p *Project) Stop() (err error) {
 	if p.IsRunning {
 		p.Entries[len(p.Entries)-1].End = time.Now()
@@ -70,16 +105,22 @@ func (p *Project) Stop() (err error) {
 
 // Archive hides a project and all its children.
 func (p *Project) Archive() {
-	p.IsRunning = false
-	p.IsArchived = true
+	if p.IsRunning {
+		p.Stop()
+	}
 
 	for _, c := range p.Children {
 		c.Archive()
 	}
 
+	p.IsArchived = true
+
 	fmt.Printf("archived \"%s\"\n", p.Name)
 }
 
+// Stats show how long a project and all its children have been running for the
+// dur amount of time. The amount of time shown next to a project will be the
+// sum of the time that it and all of its children have been running.
 func (p *Project) Stats(w *tabwriter.Writer, padding string, dur time.Duration, durString string) {
 	if !p.IsArchived {
 		name := p.Name
@@ -103,7 +144,8 @@ func (p *Project) Stats(w *tabwriter.Writer, padding string, dur time.Duration, 
 	}
 }
 
-// Timecard prints all the entries for a project.
+// Timecard prints all the entries for a project. It will print the entries
+// of all of its child projects too.
 func (p *Project) Timecard(config Config) {
 	since, sinceStr := parseTimeString(3)
 
@@ -111,6 +153,7 @@ func (p *Project) Timecard(config Config) {
 	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\n")
 
 	p.printTimecard(w, since, config)
+
 	for _, c := range p.Children {
 		if !c.IsArchived {
 			c.printTimecard(w, since, config)
@@ -123,6 +166,8 @@ func (p *Project) Timecard(config Config) {
 	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceStr)
 }
 
+// printTimecard prints the entries just for this project and not its child
+// projects.
 func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config Config) {
 	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
@@ -175,15 +220,15 @@ func (p *Project) durationSince(t time.Time) (dur time.Duration) {
 	return dur
 }
 
-func (p *Project) findProject(name string) []*Project {
+func (p *Project) FindProjects(name string) []*Project {
 	// Invariant: no two projects should ever have the exact same full path
 	// name.  This is enforced by tbWrapper.New()
 
 	// Keeps both exact and suffix matches
 	matches := []*Project{}
 	for _, c := range p.Children {
-		c.findProject(name)
-		matches = append(matches, c.findProject(name)...)
+		c.FindProjects(name)
+		matches = append(matches, c.FindProjects(name)...)
 	}
 
 	if p.Name == name || strings.HasSuffix(p.Name, name) {
@@ -191,4 +236,21 @@ func (p *Project) findProject(name string) []*Project {
 	}
 
 	return matches
+}
+
+// recalculate the duration of all entries.
+func (p *Project) RecalculateEntires() {
+	for _, c := range p.Children {
+		c.RecalculateEntires()
+	}
+
+	for _, e := range p.Entries {
+		e.CalculateDuration()
+	}
+}
+
+func (p *Project) Sort() {
+	sort.Slice(p.Children, func(i, j int) bool {
+		return p.Children[i].Name < p.Children[j].Name
+	})
 }

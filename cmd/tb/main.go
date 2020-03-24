@@ -31,7 +31,7 @@ names:
 	Projects can be arranged hierarchically using "/".  For example, you could
 	have a parent project called "school" and create a child project using:
 
-	  tb new school/cs193
+		tb new school/cs193
 
 	The full path name for that new project is "school/cs193", and when getting
 	the stats for the school project tb will also count time tracked for the
@@ -75,25 +75,29 @@ storage:
 
 func main() {
 	path := os.Getenv("HOME") + "/.tb.json"
-	tbf, err := tb.Load(path)
+	tbw, err := tb.Load(path)
 	if err != nil {
 		fmt.Println("failed to load:", err.Error())
 		return
 	}
 
+	// TODO migrations
+
 	didEdit := false
 
 	l := len(os.Args)
 	if l == 1 {
-		tbf.Status()
+		tbw.Status()
 	} else if l == 2 {
 		command := strings.ToLower(os.Args[1])
 
 		switch command {
 		case "stats":
-			tbf.Stats()
+			tbw.Stats()
 		case "help":
 			fmt.Println(helpText)
+		case "recalc", "recalculate":
+			tbw.Recalculate()
 		}
 	} else {
 		command := strings.ToLower(os.Args[1])
@@ -101,7 +105,7 @@ func main() {
 
 		switch command {
 		case "new":
-			err := tbf.New(projectName)
+			err := tbw.New(projectName)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -109,7 +113,7 @@ func main() {
 
 			didEdit = true
 		case "start":
-			p, err := tbf.FindProject(projectName)
+			p, err := tbw.FindProject(projectName)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -123,7 +127,7 @@ func main() {
 
 			didEdit = true
 		case "stop":
-			p, err := tbf.FindProject(projectName)
+			p, err := tbw.FindProject(projectName)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -137,7 +141,7 @@ func main() {
 
 			didEdit = true
 		case "s":
-			p, err := tbf.FindProject(projectName)
+			p, err := tbw.FindProject(projectName)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -155,15 +159,15 @@ func main() {
 
 			didEdit = true
 		case "timecard":
-			p, err := tbf.FindProject(projectName)
+			p, err := tbw.FindProject(projectName)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
 			}
 
-			p.Timecard(tbf.Conf)
+			p.Timecard(tbw.Conf)
 		case "archive":
-			p, err := tbf.FindProject(projectName)
+			p, err := tbw.FindProject(projectName)
 			if err != nil {
 				fmt.Println(err.Error())
 				return
@@ -172,12 +176,12 @@ func main() {
 			p.Archive()
 			didEdit = true
 		case "stats":
-			tbf.Stats()
+			tbw.Stats()
 		}
 	}
 
 	if didEdit {
-		err = tbf.Save(path)
+		err = tbw.Save(path)
 		if err != nil {
 			fmt.Println("failed to save:", err.Error())
 			return

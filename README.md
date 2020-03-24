@@ -24,7 +24,7 @@ names:
 	Projects can be arranged hierarchically using "/".  For example, you could
 	have a parent project called "school" and create a child project using:
 
-	  tb new school/cs193
+		tb new school/cs193
 
 	The full path name for that new project is "school/cs193", and when getting
 	the stats for the school project tb will also count time tracked for the
