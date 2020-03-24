@@ -21,7 +21,7 @@ func migrate0to1(tbw *tb.TBWrapper) {
 			return
 		}
 		newName := projs[0].Name
-		projs[0] = p
+		*projs[0] = *p
 		projs[0].Name = newName
 	}
 

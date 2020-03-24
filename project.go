@@ -53,7 +53,6 @@ func (p *Project) New(name string) (added bool, err error) {
 			}
 		}
 
-		fmt.Println("added", newProj)
 		p.Children = append(p.Children, newProj)
 		return true, nil
 	} else {
