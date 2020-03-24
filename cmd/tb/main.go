@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cjenright/tb"
+	"github.com/cjenright/tb/migrations"
 )
 
 const (
@@ -81,9 +82,14 @@ func main() {
 		return
 	}
 
-	// TODO migrations
-
 	didEdit := false
+
+	if tbw.Conf.Version != tb.CurrentVersion {
+		fmt.Println("Migrating")
+		// TODO ask for permission and describe changes
+		migrations.Migrate(tbw)
+		didEdit = true
+	}
 
 	l := len(os.Args)
 	if l == 1 {
@@ -165,7 +171,7 @@ func main() {
 				return
 			}
 
-			p.Timecard(tbw.Conf)
+			p.Timecard(*tbw.Conf)
 		case "archive":
 			p, err := tbw.FindProject(projectName)
 			if err != nil {

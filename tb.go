@@ -14,7 +14,7 @@ import (
 const (
 	DefaultDateFormat = "1/31"     // Month/Day
 	DefaultTimeFormat = "15:04:05" // HH:MM:SS, 24 hr
-	CurrentVersion    = 0
+	CurrentVersion    = 1
 )
 
 // A Config defines how date and times are formatted
@@ -26,13 +26,13 @@ type Config struct {
 
 // A TBWrapper wraps a Config and a list of projects
 type TBWrapper struct {
-	Conf Config  `json:"config"`
-	Root Project `json:"root"`
+	Conf     *Config    `json:"config"`
+	Root     *Project   `json:"root"`
+	Projects []*Project `json:"projects"`
 }
 
 func (tb *TBWrapper) New(name string) error {
 	_, err := tb.Root.New("/" + name)
-	fmt.Println(tb.Root)
 	return err
 }
 
@@ -68,7 +68,7 @@ func (tb *TBWrapper) Stats() {
 // TODO i don't like this method
 // TODO all user input should be in cmd, not here
 func (tb *TBWrapper) FindProject(name string) (*Project, error) {
-	matches := tb.Root.FindProjects(name)
+	matches := tb.Root.FindProjects("/" + name)
 
 	if len(matches) > 1 {
 		selection := 0

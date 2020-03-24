@@ -53,6 +53,7 @@ func (p *Project) New(name string) (added bool, err error) {
 			}
 		}
 
+		fmt.Println("added", newProj)
 		p.Children = append(p.Children, newProj)
 		return true, nil
 	} else {
@@ -124,8 +125,9 @@ func (p *Project) Archive() {
 func (p *Project) Stats(w *tabwriter.Writer, padding string, dur time.Duration, durString string) {
 	if !p.IsArchived {
 		name := p.Name
+		arrow := ""
 		if padding != "" {
-			padding += "↳ "
+			arrow = "↳ "
 			name = name[strings.LastIndex(name, "/")+1 : len(name)]
 		}
 
@@ -133,7 +135,7 @@ func (p *Project) Stats(w *tabwriter.Writer, padding string, dur time.Duration, 
 		fmt.Fprintf(
 			w,
 			"%s%s\t%s\n",
-			padding,
+			padding+arrow,
 			name,
 			dur.Truncate(time.Second).String(),
 		)
@@ -169,6 +171,7 @@ func (p *Project) Timecard(config Config) {
 // printTimecard prints the entries just for this project and not its child
 // projects.
 func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config Config) {
+	println(p.Name)
 	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
 		date := e.Start.Format(config.DateFormat)
@@ -220,15 +223,19 @@ func (p *Project) durationSince(t time.Time) (dur time.Duration) {
 	return dur
 }
 
+// TODO this got janky with hierarchy
+/*
 func (p *Project) FindProjects(name string) []*Project {
-	// Invariant: no two projects should ever have the exact same full path
-	// name.  This is enforced by tbWrapper.New()
-
 	// Keeps both exact and suffix matches
 	matches := []*Project{}
+
+	recName := name
+	if strings.HasPrefix(name, "/"+p.Name) {
+		recName = strings.TrimPrefix(name, "/"+p.Name)
+	}
+
 	for _, c := range p.Children {
-		c.FindProjects(name)
-		matches = append(matches, c.FindProjects(name)...)
+		matches = append(matches, c.FindProjects(recName)...)
 	}
 
 	if p.Name == name || strings.HasSuffix(p.Name, name) {
@@ -236,6 +243,23 @@ func (p *Project) FindProjects(name string) []*Project {
 	}
 
 	return matches
+}
+*/
+func (p *Project) FindProjects(name string) []*Project {
+	if name == p.Name || strings.HasSuffix(p.Name, name) {
+		return []*Project{p}
+	} else if strings.HasPrefix(name, p.Name+"/") {
+		matches := []*Project{}
+
+		name = strings.TrimPrefix(name, p.Name+"/")
+
+		for _, c := range p.Children {
+			matches = append(matches, c.FindProjects(name)...)
+		}
+		return matches
+	} else {
+		return []*Project{}
+	}
 }
 
 // recalculate the duration of all entries.
