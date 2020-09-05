@@ -76,7 +76,14 @@ func (p *Project) Start() (err error) {
 	if p.IsRunning {
 		return ErrAlreadyStarted
 	} else {
-		e := Entry{Start: time.Now()}
+		var note string
+		if len(os.Args) > 2 {
+			note = strings.Join(os.Args[3:], " ")
+		} else {
+			note = ""
+		}
+
+		e := Entry{Start: time.Now(), StartNote: note}
 		p.Entries = append(p.Entries, e)
 		p.IsRunning = true
 
@@ -89,9 +96,17 @@ func (p *Project) Start() (err error) {
 // Stop stops time tracking a project. It does not stop its children.
 func (p *Project) Stop() (err error) {
 	if p.IsRunning {
+		var note string
+		if len(os.Args) > 2 {
+			note = strings.Join(os.Args[3:], " ")
+		} else {
+			note = ""
+		}
+
 		p.Entries[len(p.Entries)-1].End = time.Now()
 		p.Entries[len(p.Entries)-1].CalculateDuration()
 		p.IsRunning = false
+		p.Entries[len(p.Entries)-1].EndNote = note
 
 		dur := p.Entries[len(p.Entries)-1].Duration
 		fmt.Printf("stopped \"%s\" after a duration of %s\n", p.Name, dur.Truncate(time.Second).String())
@@ -152,7 +167,7 @@ func (p *Project) Timecard(config Config) {
 	since, sinceStr := parseTimeString(3)
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\n")
+	fmt.Fprintf(w, "Project\tDate\tStart\tEnd\tDuration\tStart Note\tEnd Note\n")
 
 	p.printTimecard(w, since, config)
 
@@ -163,7 +178,7 @@ func (p *Project) Timecard(config Config) {
 	}
 
 	w.Flush()
-	fmt.Println("-----------------------------------------------------")
+	fmt.Println("-----------------------------------------------------------------------")
 	dur := p.durationSince(time.Now().Add(-since)).Truncate(time.Second)
 	fmt.Printf("Total duration: %s in the past %s\n", dur, sinceStr)
 }
@@ -185,7 +200,7 @@ func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config
 			dur = e.Duration.Truncate(time.Second).String()
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t\n", p.Name, date, start, end, dur)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n", p.Name, date, start, end, dur, e.StartNote, e.EndNote)
 	}
 }
 

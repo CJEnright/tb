@@ -8,6 +8,9 @@ import (
 	"github.com/cjenright/tb"
 )
 
+// TODO log command - show entries in chronological order
+// ^^ yikes that'll be expensive
+
 const (
 	helpText = `tb - time tracking
 
