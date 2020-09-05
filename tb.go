@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultDateFormat = "1/31"     // Month/Day
+	DefaultDateFormat = "1/02"     // Month/Day
 	DefaultTimeFormat = "15:04:05" // HH:MM:SS, 24 hr
 	CurrentVersion    = 1
 )
@@ -169,6 +169,10 @@ func abbrvToDuration(input string) (dur time.Duration, s string) {
 	return dur, s
 }
 
+func (tb *TBWrapper) RefreshPaths() {
+	tb.Root.RefreshPaths("")
+}
+
 // Load loads a file for editing time tracking information.
 func Load(path string) (tb *TBWrapper, err error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -202,6 +206,10 @@ func Load(path string) (tb *TBWrapper, err error) {
 
 	if tb.Conf.TimeFormat == "" {
 		tb.Conf.TimeFormat = DefaultTimeFormat
+	}
+
+	if tb.Root == nil {
+		tb.Root = &Project{}
 	}
 
 	return tb, err

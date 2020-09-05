@@ -19,6 +19,7 @@ var (
 // representing a unit of tracked time.
 type Project struct {
 	Name       string `json:"name"`
+	Path       string `json:"path"`
 	IsRunning  bool   `json:"is_running"`
 	IsArchived bool   `json:"is_archived"`
 
@@ -31,24 +32,30 @@ type Project struct {
 // a child of a more distant child. It returns true if the new project was
 // created as a child project of the current project, and false if it was not.
 func (p *Project) New(name string) (added bool, err error) {
-	if name == p.Name {
+	return p.newHelper(name, name)
+}
+
+// This function does the actual "new stuff", it's here just so we don't have
+// to pass the same param twice.
+func (p *Project) newHelper(currName, startName string) (added bool, err error) {
+	if currName == p.Name {
 		return false, ErrProjectAlreadyExists
-	} else if strings.HasPrefix(name, p.Name+"/") {
-		name = strings.TrimPrefix(name, p.Name+"/")
+	} else if strings.HasPrefix(currName, p.Name+"/") {
+		currName = strings.TrimPrefix(currName, p.Name+"/")
 
 		for _, c := range p.Children {
-			added, err = c.New(name)
+			added, err = c.newHelper(currName, startName)
 			if added || err != nil {
 				return added, err
 			}
 		}
 
 		// Didn't fit any child, add it to this project
-		newProj := &Project{Name: name}
+		newProj := &Project{Name: currName}
 		// If the new name still has /s then create those intermediary projects
-		if split := strings.Split(name, "/"); len(split) > 1 {
+		if split := strings.Split(currName, "/"); len(split) > 1 {
 			for i := len(split) - 1; i >= 0; i-- {
-				newProj = &Project{Name: split[i], Children: []*Project{newProj}}
+				newProj = &Project{Name: split[i], Path: startName, Children: []*Project{newProj}}
 			}
 		}
 
@@ -63,7 +70,7 @@ func (p *Project) New(name string) (added bool, err error) {
 func (p *Project) Status() {
 	if p.IsRunning {
 		dur := time.Now().Sub(p.Entries[len(p.Entries)-1].Start)
-		fmt.Printf("%s is running (%s)\n", p.Name, dur.Truncate(time.Second).String())
+		fmt.Printf("%s is running (%s)\n", p.Path, dur.Truncate(time.Second).String())
 	}
 
 	for _, c := range p.Children {
@@ -87,7 +94,7 @@ func (p *Project) Start() (err error) {
 		p.Entries = append(p.Entries, e)
 		p.IsRunning = true
 
-		fmt.Printf("started \"%s\" at %s\n", p.Name, e.Start.Format("15:04 EDT"))
+		fmt.Printf("started \"%s\" at %s\n", p.Path, e.Start.Format("15:04 EDT"))
 	}
 
 	return err
@@ -109,9 +116,9 @@ func (p *Project) Stop() (err error) {
 		p.Entries[len(p.Entries)-1].EndNote = note
 
 		dur := p.Entries[len(p.Entries)-1].Duration
-		fmt.Printf("stopped \"%s\" after a duration of %s\n", p.Name, dur.Truncate(time.Second).String())
+		fmt.Printf("stopped \"%s\" after a duration of %s\n", p.Path, dur.Truncate(time.Second).String())
 	} else {
-		return fmt.Errorf("project \"%s\" isn't running", p.Name)
+		return fmt.Errorf("project \"%s\" isn't running", p.Path)
 	}
 
 	return err
@@ -129,7 +136,7 @@ func (p *Project) Archive() {
 
 	p.IsArchived = true
 
-	fmt.Printf("archived \"%s\"\n", p.Name)
+	fmt.Printf("archived \"%s\"\n", p.Path)
 }
 
 // Stats show how long a project and all its children have been running for the
@@ -186,7 +193,6 @@ func (p *Project) Timecard(config Config) {
 // printTimecard prints the entries just for this project and not its child
 // projects.
 func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config Config) {
-	println(p.Name)
 	entries := p.entriesSince(time.Now().Add(-since))
 	for _, e := range entries {
 		date := e.Start.Format(config.DateFormat)
@@ -200,7 +206,7 @@ func (p *Project) printTimecard(w *tabwriter.Writer, since time.Duration, config
 			dur = e.Duration.Truncate(time.Second).String()
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n", p.Name, date, start, end, dur, e.StartNote, e.EndNote)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t\n", p.Path, date, start, end, dur, e.StartNote, e.EndNote)
 	}
 }
 
@@ -266,6 +272,22 @@ func (p *Project) RecalculateEntires() {
 
 	for i, _ := range p.Entries {
 		p.Entries[i].CalculateDuration()
+	}
+}
+
+// RefreshPaths updates all paths in all accessible projects so that they
+// actually reflect their current position. This was really only added so that
+// I wouldn't have to add the paths manually, but it could be useful if someone
+// wanted to reorganize their projects.
+func (p *Project) RefreshPaths(prefix string) {
+	prefix += p.Name
+	p.Path = prefix
+	if prefix != "" {
+		prefix += "/"
+	}
+
+	for _, c := range p.Children {
+		c.RefreshPaths(prefix)
 	}
 }
 

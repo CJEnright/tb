@@ -100,6 +100,9 @@ func main() {
 		case "recalc", "recalculate":
 			tbw.Recalculate()
 			didEdit = true
+		case "refresh":
+			tbw.RefreshPaths()
+			didEdit = true
 		default:
 			fmt.Printf("tb: unknown command %v\n", command)
 		}
@@ -180,7 +183,7 @@ func getProject(tbw *tb.TBWrapper, name string) *tb.Project {
 			fmt.Printf("multiple projects found with suffix \"%s\":\n", name)
 
 			for i, v := range matches {
-				fmt.Printf("(%d) %s\n", i+1, v.Name)
+				fmt.Printf("(%d) %s\n", i+1, v.Path)
 			}
 
 			_, err := fmt.Scanln(&selection)
