@@ -64,66 +64,6 @@ func (tb *TBWrapper) Stats() {
 	w.Flush()
 }
 
-// TODO i don't like this method
-// TODO all user input should be in cmd, not here
-func (tb *TBWrapper) FindProject(name string) (*Project, error) {
-	matches := tb.Root.FindProjects("/" + name)
-
-	if len(matches) > 1 {
-		selection := 0
-
-		for selection < 1 || selection > len(matches) {
-			fmt.Printf("multiple projects found with suffix \"%s\":\n", name)
-
-			for i, v := range matches {
-				fmt.Printf("(%d) %s\n", i+1, v.Name)
-			}
-
-			_, err := fmt.Scanln(&selection)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return matches[selection-1], nil
-	} else if len(matches) == 1 {
-		return matches[0], nil
-	} else {
-		return nil, ErrProjectNotFound
-	}
-}
-
-/*
-// FindProject finds a project that either has the prefix name or has
-// a full path name equal to the name parameter.
-func (tb *TBWrapper) FindProject(name string) (*Project, error) {
-	matches := tb.Root.findProject(name)
-
-	if len(matches) > 1 {
-		selection := 0
-
-		for selection < 1 || selection > len(matches) {
-			fmt.Printf("multiple projects found with suffix \"%s\":\n", name)
-
-			for i, v := range matches {
-				fmt.Printf("(%d) %s\n", i+1, v.Name)
-			}
-
-			_, err := fmt.Scanln(&selection)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return matches[selection-1], nil
-	} else if len(matches) == 1 {
-		return matches[0], nil
-	} else {
-		return nil, ErrProjectNotFound
-	}
-}
-*/
-
 // parseTimeString finds a duration from strings like
 // "1w", "1y3d", "week", "1 month", etc.
 // It returns the duration that string represents and a cleaned

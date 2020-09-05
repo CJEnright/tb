@@ -12,7 +12,6 @@ import (
 
 var (
 	ErrAlreadyStarted       = errors.New("project is already running")
-	ErrProjectNotFound      = errors.New("no project with that name found")
 	ErrProjectAlreadyExists = errors.New("a project with that name already exists")
 )
 
@@ -63,8 +62,8 @@ func (p *Project) New(name string) (added bool, err error) {
 // Status prints whether or not a project is running currently.
 func (p *Project) Status() {
 	if p.IsRunning {
-		// TODO should say how long it's been running
-		fmt.Printf("%s is running\n", p.Name)
+		dur := time.Now().Sub(p.Entries[len(p.Entries)-1].Start)
+		fmt.Printf("%s is running (%s)\n", p.Name, dur.Truncate(time.Second).String())
 	}
 
 	for _, c := range p.Children {

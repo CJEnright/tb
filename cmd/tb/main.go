@@ -15,14 +15,14 @@ commands:
 	tb               Which projects are running
 	tb new name      Register a new project
 
-	tb start name    Start tracking a project (can also match by suffix)
-	tb stop name     Stop tracking a project (can also match by suffix)
-	tb s name        Toggle on/off tracking a project
+	tb start name [note]  Start tracking a project (can also match by suffix)
+	tb stop name [note]   Stop tracking a project (can also match by suffix)
+	tb s name [note]      Toggle on/off tracking a project
 
 	tb archive name  Archive a project so it's not seen any more
 	tb recover name  Recover a project so it's not archived any more
 
-	tb stats [time]  How long each non-archived project has been running
+	tb stats [time]          How long each non-archived project has been running
 	tb timecard name [time]  Print a timecard for a project
 
 	tb help          Show this help page
@@ -97,6 +97,8 @@ func main() {
 		case "recalc", "recalculate":
 			tbw.Recalculate()
 			didEdit = true
+		default:
+			fmt.Printf("tb: unknown command %v\n", command)
 		}
 	} else {
 		command := strings.ToLower(os.Args[1])
@@ -112,12 +114,7 @@ func main() {
 
 			didEdit = true
 		case "start":
-			p, err := tbw.FindProject(projectName)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-
+			p := getProject(tbw, projectName)
 			err = p.Start()
 			if err != nil {
 				fmt.Println(err.Error())
@@ -126,12 +123,7 @@ func main() {
 
 			didEdit = true
 		case "stop":
-			p, err := tbw.FindProject(projectName)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-
+			p := getProject(tbw, projectName)
 			err = p.Stop()
 			if err != nil {
 				fmt.Println(err.Error())
@@ -140,12 +132,7 @@ func main() {
 
 			didEdit = true
 		case "s":
-			p, err := tbw.FindProject(projectName)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-
+			p := getProject(tbw, projectName)
 			if p.IsRunning == true {
 				err = p.Stop()
 			} else {
@@ -158,24 +145,16 @@ func main() {
 
 			didEdit = true
 		case "timecard":
-			p, err := tbw.FindProject(projectName)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-
+			p := getProject(tbw, projectName)
 			p.Timecard(*tbw.Conf)
 		case "archive":
-			p, err := tbw.FindProject(projectName)
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-
+			p := getProject(tbw, projectName)
 			p.Archive()
 			didEdit = true
 		case "stats":
 			tbw.Stats()
+		default:
+			fmt.Printf("tb: unknown command %v\n", command)
 		}
 	}
 
@@ -185,5 +164,35 @@ func main() {
 			fmt.Println("failed to save:", err.Error())
 			return
 		}
+	}
+}
+
+func getProject(tbw *tb.TBWrapper, name string) *tb.Project {
+	matches := tbw.Root.FindProjects("/" + name)
+
+	if len(matches) > 1 {
+		selection := 0
+
+		for selection < 1 || selection > len(matches) {
+			fmt.Printf("multiple projects found with suffix \"%s\":\n", name)
+
+			for i, v := range matches {
+				fmt.Printf("(%d) %s\n", i+1, v.Name)
+			}
+
+			_, err := fmt.Scanln(&selection)
+			if err != nil {
+				fmt.Printf("unable to handle input selection: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		return matches[selection-1]
+	} else if len(matches) == 1 {
+		return matches[0]
+	} else {
+		fmt.Printf("no project matching name %s was found\n", name)
+		os.Exit(1)
+		return nil
 	}
 }
