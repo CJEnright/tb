@@ -32,7 +32,7 @@ type Project struct {
 // a child of a more distant child. It returns true if the new project was
 // created as a child project of the current project, and false if it was not.
 func (p *Project) New(name string) (added bool, err error) {
-	return p.newHelper(name, name)
+	return p.newHelper(name, strings.TrimPrefix(name, "/"))
 }
 
 // This function does the actual "new stuff", it's here just so we don't have
@@ -51,7 +51,7 @@ func (p *Project) newHelper(currName, startName string) (added bool, err error) 
 		}
 
 		// Didn't fit any child, add it to this project
-		newProj := &Project{Name: currName}
+		newProj := &Project{Name: currName, Path: startName}
 		// If the new name still has /s then create those intermediary projects
 		if split := strings.Split(currName, "/"); len(split) > 1 {
 			for i := len(split) - 1; i >= 0; i-- {
